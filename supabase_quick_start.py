@@ -79,92 +79,125 @@ def fmt_float(row, column: str):
 # ============================================================
 # 3. Fetch Data from NBA API
 # ============================================================
+# Colunas avancadas que o MeasureType=Advanced retorna (e o Base nao tem)
+ADVANCED_COLUMNS = [
+    "OFF_RATING", "DEF_RATING", "NET_RATING",
+    "AST_PCT", "AST_TO", "AST_RATIO",
+    "OREB_PCT", "DREB_PCT", "REB_PCT",
+    "TM_TOV_PCT", "EFG_PCT", "TS_PCT",
+    "PACE", "PIE", "POSS",
+]
+ADVANCED_RENAME = {
+    "OFF_RATING": "OFF_RTG",
+    "DEF_RATING": "DEF_RTG",
+    "NET_RATING": "NET_RTG",
+}
+
+
+def fetch_advanced(endpoint_cls, season: str, season_type: str, key: str) -> pd.DataFrame:
+    """Busca metricas avancadas (MeasureType=Advanced) e retorna so as colunas extras."""
+    try:
+        adv = endpoint_cls(
+            season=season,
+            season_type_all_star=season_type,
+            pace_adjust=PaceAdjust.default,
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Advanced",
+            get_request=True,
+        )
+        if adv.data_sets and len(adv.data_sets) > 0:
+            frame = adv.get_data_frames()[0]
+            cols = [key] + [c for c in ADVANCED_COLUMNS if c in frame.columns]
+            return frame[cols].rename(columns=ADVANCED_RENAME)
+    except Exception as e:
+        print(f"   [WARN] Erro ao buscar advanced: {type(e).__name__}")
+    return pd.DataFrame(columns=[key])
+
+
+def merge_advanced(df: pd.DataFrame, df_adv: pd.DataFrame, key: str) -> pd.DataFrame:
+    """Mescla colunas avancadas ao DataFrame de estatisticas basicas."""
+    if df_adv.empty or key not in df_adv.columns:
+        print("   [WARN] Metricas avancadas indisponiveis")
+        return df
+    # Evita colunas duplicadas (MIN, FGM, FG_PCT etc aparecem nos dois)
+    for col in df_adv.columns:
+        if col != key and col in df.columns:
+            df = df.drop(columns=[col])
+    merged = df.merge(df_adv, on=key, how="left")
+    print(f"   [OK] Basicas + avancadas mescladas: {len(merged)} registros")
+    return merged
+
+
 def fetch_team_stats(season: str = None, season_type: str = None) -> pd.DataFrame:
-    """Fetch team statistics from NBA API."""
+    """Busca estatisticas BASICAS (PTS, REB, AST...) + metricas AVANCADAS."""
     if season is None:
-        season = Season.default  # "2026-27" (automatic based on date)
+        season = Season.default  # "2026-27"
     if season_type is None:
         season_type = SeasonTypeAllStar.default  # "Regular Season"
 
     print(f"[NET] Fetching team stats for {season} ({season_type})...")
 
-    data = LeagueDashTeamStats(
-        season=season,
-        season_type_all_star=season_type,
-        pace_adjust=PaceAdjust.default,
-        per_mode_detailed="PerGame",  # MEDIA por jogo (evita totais como 1000 pts)
-        measure_type_detailed_defense="Advanced",  # OffRtg, DefRtg, PACE, PIE, POSS...
-        get_request=True  # Use True for real API, False for offline mode
-    )
-
-    # Try to get data frames; handle both online and offline modes
+    # 1. MeasureType=Base -> estatisticas simples (PTS, REB, AST, FGM...)
     try:
+        data = LeagueDashTeamStats(
+            season=season,
+            season_type_all_star=season_type,
+            pace_adjust=PaceAdjust.default,
+            per_mode_detailed="PerGame",  # MEDIA por jogo (evita totais como 1000 pts)
+            measure_type_detailed_defense="Base",
+            get_request=True,
+        )
         if data.data_sets and len(data.data_sets) > 0:
             df = data.league_dash_team_stats.get_data_frame()
-            print(f"   [OK] Retrieved {len(df)} team records (online mode)")
+            print(f"   [OK] Basicas: {len(df)} teams (PTS, REB, AST...)")
         else:
-            # Offline mode: return empty DataFrame with expected columns
-            print(f"   [OFFLINE] No data available, returning structure")
-            import pandas as pd
-            df = pd.DataFrame(columns=[
-                'TEAM_ID', 'TEAM_NAME', 'GP', 'W', 'L', 'W_PCT', 'PACE', 'PACE_PER40', 'PTS'
-            ])
+            raise ValueError("sem dados")
     except Exception as e:
-        print(f"   [WARN] Error fetching data: {type(e).__name__}")
-        import pandas as pd
+        print(f"   [WARN] Erro ao buscar basicas: {type(e).__name__}")
         df = pd.DataFrame(columns=[
-            'TEAM_ID', 'TEAM_NAME', 'GP', 'W', 'L', 'W_PCT', 'PACE', 'PACE_PER40', 'PTS'
+            "TEAM_ID", "TEAM_NAME", "GP", "W", "L", "W_PCT",
+            "PTS", "REB", "AST", "FGM", "FGA",
         ])
 
-    # Metricas avancadas (OffRtg, DefRtg, PACE, PIE, POSS) ja vem no endpoint
-    if not df.empty and 'PACE' in df.columns:
-        print(f"   [OK] Advanced: OffRtg/DefRtg/PACE/PIE/POSS incluidos")
-
-    return df
+    # 2. MeasureType=Advanced -> OffRtg, DefRtg, PACE, PIE, POSS
+    df_adv = fetch_advanced(LeagueDashTeamStats, season, season_type, "TEAM_ID")
+    return merge_advanced(df, df_adv, "TEAM_ID")
 
 
 def fetch_player_stats(season: str = None, season_type: str = None) -> pd.DataFrame:
-    """Fetch player statistics from NBA API."""
+    """Busca estatisticas BASICAS (PTS, REB, AST...) + metricas AVANCADAS."""
     if season is None:
-        season = Season.default  # "2026-27" (automatic based on date)
+        season = Season.default  # "2026-27"
     if season_type is None:
         season_type = SeasonTypeAllStar.default  # "Regular Season"
 
     print(f"[NET] Fetching player stats for {season} ({season_type})...")
 
-    data = LeagueDashPlayerStats(
-        season=season,
-        season_type_all_star=season_type,
-        pace_adjust=PaceAdjust.default,
-        per_mode_detailed="PerGame",  # MEDIA por jogo (evita totais como 1000 pts)
-        measure_type_detailed_defense="Advanced",  # OffRtg, DefRtg, PACE, PIE, POSS...
-        get_request=True  # Use True for real API, False for offline mode
-    )
-
-    # Try to get data frames; handle both online and offline modes
+    # 1. MeasureType=Base -> estatisticas simples
     try:
+        data = LeagueDashPlayerStats(
+            season=season,
+            season_type_all_star=season_type,
+            pace_adjust=PaceAdjust.default,
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Base",
+            get_request=True,
+        )
         if data.data_sets and len(data.data_sets) > 0:
             df = data.league_dash_player_stats.get_data_frame()
-            print(f"   [OK] Retrieved {len(df)} player records (online mode)")
+            print(f"   [OK] Basicas: {len(df)} players (PTS, REB, AST...)")
         else:
-            # Offline mode: return empty DataFrame with expected columns
-            print(f"   [OFFLINE] No cached data available, returning structure")
-            import pandas as pd
-            df = pd.DataFrame(columns=[
-                'PLAYER_ID', 'PLAYER_NAME', 'TEAM_ABBREVIATION', 'PTS', 'PACE', 'AGE'
-            ])
+            raise ValueError("sem dados")
     except Exception as e:
-        print(f"   [WARN] Error fetching data: {type(e).__name__}")
-        import pandas as pd
+        print(f"   [WARN] Erro ao buscar basicas: {type(e).__name__}")
         df = pd.DataFrame(columns=[
-            'PLAYER_ID', 'PLAYER_NAME', 'TEAM_ABBREVIATION', 'PTS', 'PACE', 'AGE'
+            "PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION",
+            "PTS", "REB", "AST", "AGE",
         ])
 
-    # Metricas avancadas (OffRtg, DefRtg, PACE, PIE, POSS) ja vem no endpoint
-    if not df.empty and 'PACE' in df.columns:
-        print(f"   [OK] Advanced: OffRtg/DefRtg/PACE/PIE/POSS incluidos")
-
-    return df
+    # 2. MeasureType=Advanced -> OffRtg, DefRtg, PACE, PIE, POSS
+    df_adv = fetch_advanced(LeagueDashPlayerStats, season, season_type, "PLAYER_ID")
+    return merge_advanced(df, df_adv, "PLAYER_ID")
 
 # ============================================================
 # 3. Store Data in Supabase
@@ -219,9 +252,9 @@ def store_team_stats(df: pd.DataFrame, season: str = None, season_type: str = No
             "pace": float(row.get("PACE", 0)) if pd.notna(row.get("PACE")) else None,
             "pace_per40": float(row.get("PACE_PER40", 0)) if pd.notna(row.get("PACE_PER40")) else None,
             # Metricas avancadas (mesmas colunas do site NBA.com/Glossary)
-            "off_rtg": float(row.get("OFF_RATING", 0)) if pd.notna(row.get("OFF_RATING")) else None,
-            "def_rtg": float(row.get("DEF_RATING", 0)) if pd.notna(row.get("DEF_RATING")) else None,
-            "net_rtg": float(row.get("NET_RATING", 0)) if pd.notna(row.get("NET_RATING")) else None,
+            "off_rtg": fmt_float(row, "OFF_RTG"),  # renomeado no merge
+            "def_rtg": fmt_float(row, "DEF_RTG"),  # renomeado no merge
+            "net_rtg": fmt_float(row, "NET_RTG"),  # renomeado no merge
             "ast_pct": fmt_pct(row, "AST_PCT"),      # 0.597 -> 59.7
             "ast_to": fmt_float(row, "AST_TO"),       # 1.49 (sem conversao)
             "ast_ratio": fmt_float(row, "AST_RATIO"), # 17.4 (sem conversao)
@@ -311,9 +344,9 @@ def store_player_stats(df: pd.DataFrame, season: str = None, season_type: str = 
             "pace": float(row.get("PACE", 0)) if pd.notna(row.get("PACE")) else None,
             "pace_per40": float(row.get("PACE_PER40", 0)) if pd.notna(row.get("PACE_PER40")) else None,
             # Metricas avancadas (mesmas colunas do site NBA.com/Glossary)
-            "off_rtg": float(row.get("OFF_RATING", 0)) if pd.notna(row.get("OFF_RATING")) else None,
-            "def_rtg": float(row.get("DEF_RATING", 0)) if pd.notna(row.get("DEF_RATING")) else None,
-            "net_rtg": float(row.get("NET_RATING", 0)) if pd.notna(row.get("NET_RATING")) else None,
+            "off_rtg": fmt_float(row, "OFF_RTG"),  # renomeado no merge
+            "def_rtg": fmt_float(row, "DEF_RTG"),  # renomeado no merge
+            "net_rtg": fmt_float(row, "NET_RTG"),  # renomeado no merge
             "ast_pct": fmt_pct(row, "AST_PCT"),      # 0.597 -> 59.7
             "ast_to": fmt_float(row, "AST_TO"),       # 1.49 (sem conversao)
             "ast_ratio": fmt_float(row, "AST_RATIO"), # 17.4 (sem conversao)
