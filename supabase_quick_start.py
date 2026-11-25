@@ -53,6 +53,7 @@ if SUPABASE_OK:
 # ============================================================
 # Colunas que vem como 0.597 na API e devem ser salvas como 59.7
 PCT_COLUMNS = (
+    "FG_PCT", "FG3_PCT", "FT_PCT",  # 0.449 -> 44.9
     "AST_PCT", "OREB_PCT", "DREB_PCT", "REB_PCT",
     "TM_TOV_PCT", "EFG_PCT", "TS_PCT", "PIE",
 )
@@ -231,13 +232,13 @@ def store_team_stats(df: pd.DataFrame, season: str = None, season_type: str = No
             "min_avg": float(row.get("MIN", 0)) if pd.notna(row.get("MIN")) else None,
             "fgm": int(row.get("FGM", 0)) if pd.notna(row.get("FGM")) else None,
             "fga": int(row.get("FGA", 0)) if pd.notna(row.get("FGA")) else None,
-            "fg_pct": float(row.get("FG_PCT", 0)) if pd.notna(row.get("FG_PCT")) else None,
+            "fg_pct": fmt_pct(row, "FG_PCT"),    # 0.449 -> 44.9
             "fg3m": int(row.get("FG3M", 0)) if pd.notna(row.get("FG3M")) else None,
             "fg3a": int(row.get("FG3A", 0)) if pd.notna(row.get("FG3A")) else None,
-            "fg3_pct": float(row.get("FG3_PCT", 0)) if pd.notna(row.get("FG3_PCT")) else None,
+            "fg3_pct": fmt_pct(row, "FG3_PCT"),  # 0.342 -> 34.2
             "ftm": int(row.get("FTM", 0)) if pd.notna(row.get("FTM")) else None,
             "fta": int(row.get("FTA", 0)) if pd.notna(row.get("FTA")) else None,
-            "ft_pct": float(row.get("FT_PCT", 0)) if pd.notna(row.get("FT_PCT")) else None,
+            "ft_pct": fmt_pct(row, "FT_PCT"),    # 0.768 -> 76.8
             "orb": int(row.get("OREB", 0)) if pd.notna(row.get("OREB")) else None,
             "drb": int(row.get("DREB", 0)) if pd.notna(row.get("DREB")) else None,
             "reb": int(row.get("REB", 0)) if pd.notna(row.get("REB")) else None,
@@ -319,13 +320,13 @@ def store_player_stats(df: pd.DataFrame, season: str = None, season_type: str = 
             "min_avg": float(row.get("MIN", 0)) if pd.notna(row.get("MIN")) else None,
             "fgm": int(row.get("FGM", 0)) if pd.notna(row.get("FGM")) else None,
             "fga": int(row.get("FGA", 0)) if pd.notna(row.get("FGA")) else None,
-            "fg_pct": float(row.get("FG_PCT", 0)) if pd.notna(row.get("FG_PCT")) else None,
+            "fg_pct": fmt_pct(row, "FG_PCT"),    # 0.449 -> 44.9
             "fg3m": int(row.get("FG3M", 0)) if pd.notna(row.get("FG3M")) else None,
             "fg3a": int(row.get("FG3A", 0)) if pd.notna(row.get("FG3A")) else None,
-            "fg3_pct": float(row.get("FG3_PCT", 0)) if pd.notna(row.get("FG3_PCT")) else None,
+            "fg3_pct": fmt_pct(row, "FG3_PCT"),  # 0.342 -> 34.2
             "ftm": int(row.get("FTM", 0)) if pd.notna(row.get("FTM")) else None,
             "fta": int(row.get("FTA", 0)) if pd.notna(row.get("FTA")) else None,
-            "ft_pct": float(row.get("FT_PCT", 0)) if pd.notna(row.get("FT_PCT")) else None,
+            "ft_pct": fmt_pct(row, "FT_PCT"),    # 0.768 -> 76.8
             "orb": int(row.get("OREB", 0)) if pd.notna(row.get("OREB")) else None,
             "drb": int(row.get("DREB", 0)) if pd.notna(row.get("DREB")) else None,
             "reb": int(row.get("REB", 0)) if pd.notna(row.get("REB")) else None,
