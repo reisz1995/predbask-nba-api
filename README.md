@@ -27,6 +27,48 @@
 - **Player and team IDs offline**: reference data ships with the package, so lookups need no request
 - **More than the NBA**: many endpoints also cover the WNBA and G League through `league_id`
 
+## Coleta de estatisticas com Supabase (uso local)
+
+Este repositorio inclui um coletor que busca as estatisticas da temporada atual
+(2026-27) diretamente do `stats.nba.com` pelo **IP local** e salva no Supabase.
+Nao ha scraping no GitHub Actions — a coleta e disparada manualmente no Windows.
+
+### Como executar (um clique)
+
+1. Configure o arquivo `.env` na raiz com suas credenciais (ja ignorado pelo git):
+
+   ```env
+   SUPABASE_URL=https://seu-projeto.supabase.co
+   SUPABASE_KEY=sua-chave-anonima
+   ```
+
+2. Dê **duplo clique** em `atualizar_stats.bat` (ou execute no terminal):
+
+   ```powershell
+   .\atualizar_stats.bat
+   ```
+
+   Ou, diretamente:
+
+   ```powershell
+   python supabase_quick_start.py
+   ```
+
+O coletor busca 30 times e ~480 jogadores com metricas avancadas
+(`OffRtg`, `DefRtg`, `NetRtg`, `PACE`, `PIE`, `POSS`, percentuais formatados),
+substitui os registros anteriores da temporada e os salva nas tabelas
+`team_stats` e `player_stats`.
+
+> **Nota**: se apos alterar tabelas no SQL Editor aparecer o erro `PGRST204`
+> ("Could not find the ... column in the schema cache"), execute
+> `supabase_reload_cache.sql` no SQL Editor do Supabase para recarregar o cache.
+
+Arquivos SQL uteis:
+- `supabase_schema.sql` — cria as tabelas (instalacao nova)
+- `supabase_add_ratings.sql` — adiciona colunas avancadas (banco existente)
+- `supabase_reload_cache.sql` — recarrega o schema cache do PostgREST
+- `supabase_fix_duplicates.sql` — remove duplicatas e cria constraints unicas
+
 ## Installation
 
 ```bash
